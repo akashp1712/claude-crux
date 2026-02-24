@@ -1,0 +1,10 @@
+{
+  "name": "crux",
+  "version": "0.1.0",
+  "description": "The crux of every decision — preserved across context compaction",
+  "author": "Akash Panchal - akashpanchal.com",
+  "repository": "https://github.com/akashp1712/claude-crux",
+  "homepage": "https://github.com/akashp1712/claude-crux#readme",
+  "license": "MIT",
+  "minClaudeCodeVersion": "1.0.33"
+}
