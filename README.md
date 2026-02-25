@@ -75,6 +75,168 @@ No `npm install`. No config files. Works immediately.
 
 ---
 
+## 🎯 Examples in Action
+
+See how Crux captures architectural decisions from natural conversation:
+
+### Example 1: API Security & Privacy
+
+**Your Prompt:**
+> "We will enhance the API performance while ensuring we never expose user's personal data unless absolutely required for functionality."
+
+**Crux Automatically Extracts:**
+```json
+{
+  "version": "1.0",
+  "atoms": {
+    "constraint_1772028358486_ao2": {
+      "id": "constraint_1772028358486_ao2",
+      "type": "CONSTRAINT",
+      "content": "Never expose user's personal data unless absolutely required for functionality",
+      "dependsOn": [],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 1,
+      "createdAt": "2026-02-25T14:05:58.486Z"
+    },
+    "goal_1772028358487_zjs": {
+      "id": "goal_1772028358487_zjs",
+      "type": "GOAL",
+      "content": "Enhance API performance",
+      "dependsOn": [],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 1,
+      "createdAt": "2026-02-25T14:05:58.487Z"
+    },
+    "rationale_1772028358487_tya": {
+      "id": "rationale_1772028358487_tya",
+      "type": "RATIONALE",
+      "content": "Data exposure must be minimized to protect user privacy and maintain security compliance",
+      "dependsOn": [
+        "constraint_1772028358486_ao2"
+      ],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 1,
+      "createdAt": "2026-02-25T14:05:58.487Z"
+    }
+  },
+  "turnCount": 1,
+  "lastUpdated": "2026-02-25T14:05:58.488Z"
+}
+```
+
+### Example 2: Technology Stack Decision
+
+**Your Prompt:**
+> "Let's implement the authentication system using JWT tokens because our mobile team already has the libraries integrated, and we can't use OAuth due to budget constraints for third-party services."
+
+**Crux Graph Result:**
+```json
+{
+  "version": "1.0",
+  "atoms": {
+    "decision_1772029123456_xyz": {
+      "id": "decision_1772029123456_xyz",
+      "type": "DECISION",
+      "content": "Implement authentication using JWT tokens",
+      "dependsOn": ["rationale_1772029123457_abc"],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 1,
+      "createdAt": "2026-02-25T14:12:34.567Z"
+    },
+    "rationale_1772029123457_abc": {
+      "id": "rationale_1772029123457_abc",
+      "type": "RATIONALE",
+      "content": "Mobile team already has JWT libraries integrated, ensuring faster development",
+      "dependsOn": ["constraint_1772029123458_def"],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 1,
+      "createdAt": "2026-02-25T14:12:34.568Z"
+    },
+    "constraint_1772029123458_def": {
+      "id": "constraint_1772029123458_def",
+      "type": "CONSTRAINT",
+      "content": "Budget constraints prevent using third-party OAuth services",
+      "dependsOn": [],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 1,
+      "createdAt": "2026-02-25T14:12:34.569Z"
+    }
+  },
+  "turnCount": 1,
+  "lastUpdated": "2026-02-25T14:12:34.570Z"
+}
+```
+
+### Example 3: Multi-Turn Decision Evolution
+
+**Turn 1 - Your Prompt:**
+> "We need to choose between React and Vue for our frontend. Our team has more React experience."
+
+**Turn 2 - Claude's Response Suggests Vue:**
+> "Vue might be better for this use case because..."
+
+**Turn 3 - Your Correction:**
+> "I understand Vue's advantages, but we must stick with React because our company standardized on it last year, and we don't have budget for retraining."
+
+**Final Crux Graph:**
+```json
+{
+  "version": "1.0",
+  "atoms": {
+    "decision_1772029999999_react": {
+      "id": "decision_1772029999999_react",
+      "type": "DECISION",
+      "content": "Use React for frontend development",
+      "dependsOn": ["rationale_1772029999999_team", "rationale_1772029999999_company"],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 3,
+      "createdAt": "2026-02-25T14:30:00.000Z"
+    },
+    "rationale_1772029999999_team": {
+      "id": "rationale_1772029999999_team",
+      "type": "RATIONALE",
+      "content": "Development team has extensive React experience",
+      "dependsOn": [],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 1,
+      "createdAt": "2026-02-25T14:30:00.001Z"
+    },
+    "rationale_1772029999999_company": {
+      "id": "rationale_1772029999999_company",
+      "type": "RATIONALE",
+      "content": "Company standardized on React last year",
+      "dependsOn": ["constraint_1772029999999_budget"],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 3,
+      "createdAt": "2026-02-25T14:30:00.002Z"
+    },
+    "constraint_1772029999999_budget": {
+      "id": "constraint_1772029999999_budget",
+      "type": "CONSTRAINT",
+      "content": "No budget available for team retraining on Vue",
+      "dependsOn": [],
+      "status": "ACTIVE",
+      "source": "user",
+      "turn": 3,
+      "createdAt": "2026-02-25T14:30:00.003Z"
+    }
+  },
+  "turnCount": 3,
+  "lastUpdated": "2026-02-25T14:30:00.004Z"
+}
+```
+
+---
+
 ## 🛠 Commands
 
 | Command | Description |
