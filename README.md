@@ -51,7 +51,11 @@ Crux runs as a native plugin for [Claude Code](https://docs.anthropic.com/en/doc
 No `npm install`. No config files. Works immediately.
 
 ```bash
-/install-plugin https://github.com/akashp1712/claude-crux
+# 1. Add the marketplace
+/plugin marketplace add akashp1712/claude-marketplace
+
+# 2. Install the plugin
+/plugin install crux@akashp1712
 ```
 *(Requires Node.js 18+ and Claude Code)*
 
