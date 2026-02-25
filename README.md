@@ -1,3 +1,8 @@
+<!-- Crux Cover Image -->
+<p align="center">
+  <img src="crux-cover.jpg" alt="Crux - Claude Code Plugin" width="800">
+</p>
+
 <div align="center">
   <h1>🧠 Crux for Claude Code</h1>
   <p><strong>Claude forgets <em>why</em>. Crux doesn't.</strong></p>
