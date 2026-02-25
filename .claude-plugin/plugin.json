@@ -1,10 +1,16 @@
 {
   "name": "crux",
   "version": "0.1.0",
-  "description": "The crux of every decision — preserved across context compaction",
-  "author": "Akash Panchal - akashpanchal.com",
+  "description": "Solves Context Compaction with a Causal Graph",
+  "author": {
+    "name": "Akash Panchal",
+    "url": "https://github.com/akashp1712"
+  },
   "repository": "https://github.com/akashp1712/claude-crux",
-  "homepage": "https://github.com/akashp1712/claude-crux#readme",
   "license": "MIT",
-  "minClaudeCodeVersion": "1.0.33"
+  "keywords": [
+    "context",
+    "compaction",
+    "causal-graph"
+  ]
 }
