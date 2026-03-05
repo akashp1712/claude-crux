@@ -1,51 +1,64 @@
 #!/usr/bin/env node
-'use strict'
+'use strict';
 
-const fs = require('fs')
-const path = require('path')
+const path = require('path');
 
-// ── Crux Graph Helpers (inlined — no imports) ──────────────────────
-function getGraphPath() {
-  const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd()
-  return path.join(projectDir, '.claude', '.crux', 'graph.json')
-}
+const LIB = path.join(__dirname, '..', 'lib');
+const { AtomGraph } = require(path.join(LIB, 'graph'));
+const storage = require(path.join(LIB, 'storage'));
 
-function loadGraph() {
-  const p = getGraphPath()
+function main(data) {
   try {
-    if (!fs.existsSync(p)) return emptyGraph()
-    return JSON.parse(fs.readFileSync(p, 'utf8'))
-  } catch { return emptyGraph() }
-}
+    const sessionId = data.session_id || data.sessionId || 'unknown';
 
-function saveGraph(graph) {
-  const p = getGraphPath()
-  fs.mkdirSync(path.dirname(p), { recursive: true })
-  graph.lastUpdated = new Date().toISOString()
-  fs.writeFileSync(p, JSON.stringify(graph, null, 2))
-}
+    const graph = AtomGraph.load(sessionId);
+    if (!graph) {
+      process.stderr.write('[crux] Session ended (no graph found).\n');
+      return;
+    }
 
-function emptyGraph() {
-  return { version: '1.0', atoms: {}, turnCount: 0, lastUpdated: new Date().toISOString() }
-}
-// ── End Crux Graph Helpers ──────────────────────────────────────────
+    const activeAtoms = graph.getActiveAtoms();
+    const decisions = activeAtoms.filter(a => a.type === 'DECISION');
+    const totalAtoms = Object.keys(graph.atoms).length;
 
-async function main() {
-  try {
-    const graph = loadGraph()
-    const atomCount = Object.keys(graph.atoms).length
-    const turnCount = graph.turnCount || 0
+    // Log final stats to stderr
+    process.stderr.write(
+      `[crux] Session ended. Atoms: ${totalAtoms}, Decisions: ${decisions.length}, ` +
+      `Added: ${graph.stats.atomsAdded}, Merged: ${graph.stats.atomsMerged}, ` +
+      `Superseded: ${graph.stats.atomsSuperseded}\n`
+    );
 
-    // Session is over — clear the graph
-    // Decisions persist only within a session; use /crux:export to save to CLAUDE.md
-    saveGraph(emptyGraph())
+    // Append to session log for analytics
+    const logPath = path.join(storage.getDataDir(), 'session-log.jsonl');
+    storage.appendJSONL(logPath, {
+      sessionId: graph.sessionId,
+      projectDir: graph.projectDir,
+      endedAt: new Date().toISOString(),
+      reason: data.reason || 'unknown',
+      totalAtoms,
+      activeAtoms: activeAtoms.length,
+      decisions: decisions.length,
+      turns: graph.turnCount,
+      stats: graph.stats
+    });
 
-    process.stderr.write(`[crux] SessionEnd: cleared graph (was ${atomCount} atom(s), turn ${turnCount})\n`)
-    process.exit(0)
+    // Graph file preserved for --resume and /crux:status
+
   } catch (err) {
-    process.stderr.write(`[crux] SessionEnd error: ${err.message}\n`)
-    process.exit(0)
+    process.stderr.write(`[crux] session-end error: ${err.message}\n`);
   }
 }
 
-main()
+// Read JSON from stdin
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { input += chunk; });
+process.stdin.on('end', () => {
+  let data = {};
+  try {
+    if (input.trim()) data = JSON.parse(input);
+  } catch (err) {
+    process.stderr.write(`[crux] Failed to parse stdin: ${err.message}\n`);
+  }
+  main(data);
+});

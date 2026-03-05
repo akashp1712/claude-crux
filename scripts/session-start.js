@@ -1,107 +1,88 @@
 #!/usr/bin/env node
-'use strict'
+'use strict';
 
-// ── Crux Graph Helpers (inlined — no imports) ──────────────────────
-function getGraphPath() {
-  const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd()
-  return require('path').join(projectDir, '.claude', '.crux', 'graph.json')
-}
+const path = require('path');
 
-function loadGraph() {
-  const fs = require('fs')
-  const p = getGraphPath()
+const LIB = path.join(__dirname, '..', 'lib');
+const { AtomGraph } = require(path.join(LIB, 'graph'));
+const storage = require(path.join(LIB, 'storage'));
+
+function main(data) {
   try {
-    if (!fs.existsSync(p)) return emptyGraph()
-    return JSON.parse(fs.readFileSync(p, 'utf8'))
-  } catch { return emptyGraph() }
-}
+    const sessionId = data.session_id || data.sessionId || 'unknown';
+    const cwd = data.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+    const source = data.source || 'startup';
 
-function saveGraph(graph) {
-  const fs = require('fs')
-  const path = require('path')
-  const p = getGraphPath()
-  fs.mkdirSync(path.dirname(p), { recursive: true })
-  graph.lastUpdated = new Date().toISOString()
-  fs.writeFileSync(p, JSON.stringify(graph, null, 2))
-}
+    // Ensure sessions directory exists
+    storage.ensureDir(storage.getSessionsDir());
 
-function emptyGraph() {
-  return { version: '1.0', atoms: {}, turnCount: 0, lastUpdated: new Date().toISOString() }
-}
+    let graph;
 
-function getActiveDecisions(graph) {
-  return Object.values(graph.atoms).filter(a => a.status === 'ACTIVE' && a.type === 'DECISION')
-}
-
-function getTriples(graph) {
-  const decisions = getActiveDecisions(graph)
-  return decisions.map(d => {
-    const deps = d.dependsOn.map(id => graph.atoms[id]).filter(Boolean)
-    const rationale = deps.find(a => a.type === 'RATIONALE')
-    const constraint = deps.find(a => a.type === 'CONSTRAINT')
-    return rationale ? { decision: d, rationale, constraint: constraint || null } : null
-  }).filter(Boolean)
-}
-
-function formatContextBlock(graph) {
-  const triples = getTriples(graph)
-  if (!triples.length) return ''
-  const lines = [
-    '--- CRUX: Active Architectural Decisions ---',
-    '⚠️  Check these before recommending any technology or architecture.',
-    ''
-  ]
-  triples.forEach(t => {
-    lines.push(`▸ [DECISION]   ${t.decision.content}`)
-    lines.push(`  [RATIONALE]  ${t.rationale.content}`)
-    if (t.constraint) lines.push(`  [CONSTRAINT] ⛔ ${t.constraint.content}`)
-    lines.push('')
-  })
-  lines.push('--- END CRUX ---')
-  return lines.join('\n')
-}
-// ── End Crux Graph Helpers ──────────────────────────────────────────
-
-async function main() {
-  try {
-    let input = ''
-    for await (const chunk of process.stdin) input += chunk
-    const data = input ? JSON.parse(input) : {}
-    const source = data.source || 'startup'
-
-    // Session-scoped: new session starts with a clean graph
-    if (source === 'startup') {
-      saveGraph(emptyGraph())
-      process.stderr.write(`[crux] SessionStart (startup): graph reset for new session\n`)
-      process.exit(0)
+    if (AtomGraph.exists(sessionId)) {
+      // Resume or compact — load existing graph
+      graph = AtomGraph.load(sessionId);
+      if (!graph) {
+        graph = new AtomGraph(sessionId, cwd);
+        graph.save();
+      }
+    } else {
+      // New session
+      graph = new AtomGraph(sessionId, cwd);
+      graph.save();
     }
 
-    // compact / resume: preserve existing graph and inject triples
-    const graph = loadGraph()
-    const triples = getTriples(graph)
+    // Build context summary
+    const activeAtoms = graph.getActiveAtoms();
+    const decisions = activeAtoms.filter(a => a.type === 'DECISION');
+    const constraints = activeAtoms.filter(a => a.type === 'CONSTRAINT');
 
-    if (!triples.length) {
-      process.exit(0)
+    let context = `[Crux] Causal graph loaded: ${activeAtoms.length} active atoms, ${decisions.length} decisions tracked.`;
+
+    if (constraints.length > 0) {
+      context += '\nActive constraints:';
+      constraints.forEach(c => {
+        context += `\n  \u26D4 ${c.content}`;
+      });
     }
 
-    let contextBlock = formatContextBlock(graph)
-    if (source === 'compact') {
-      contextBlock = '🔄 POST-COMPACTION REINJECTION\n\n' + contextBlock
+    if (decisions.length > 0) {
+      context += '\nActive decisions:';
+      decisions.forEach(d => {
+        context += `\n  \u25B8 ${d.content}`;
+      });
     }
 
+    // Output as additionalContext
     const output = {
       hookSpecificOutput: {
-        additionalContext: contextBlock
+        hookEventName: 'SessionStart',
+        additionalContext: context
       }
-    }
+    };
 
-    process.stdout.write(JSON.stringify(output))
-    process.stderr.write(`[crux] SessionStart (${source}): ${triples.length} decision(s) injected\n`)
-    process.exit(0)
+    process.stdout.write(JSON.stringify(output));
   } catch (err) {
-    process.stderr.write(`[crux] SessionStart error: ${err.message}\n`)
-    process.exit(0)
+    process.stderr.write(`[crux] session-start error: ${err.message}\n`);
+    // Graceful degradation — output empty context
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: '[Crux] Causal graph initialized (empty).'
+      }
+    }));
   }
 }
 
-main()
+// Read JSON from stdin
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { input += chunk; });
+process.stdin.on('end', () => {
+  let data = {};
+  try {
+    if (input.trim()) data = JSON.parse(input);
+  } catch (err) {
+    process.stderr.write(`[crux] Failed to parse stdin: ${err.message}\n`);
+  }
+  main(data);
+});

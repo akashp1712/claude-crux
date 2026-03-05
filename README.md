@@ -10,7 +10,8 @@
   [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
   [![Node](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-  [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-brightgreen)]()
+  [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-brightgreen)](https://github.com/akashp1712/claude-crux)
+  [![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/akashp1712/claude-crux)
 
   <p>Every memory tool remembers <b>what</b>. Only Crux remembers <b>why</b>.</p>
 </div>
@@ -32,7 +33,7 @@ Claude sees "Use REST" and thinks: *that's a suggestion I can override if someth
 
 ## ⚡ How Crux Solves It (The Causal Graph)
 
-Crux stores decisions as **causal triples**:
+Crux stores decisions as a **causal dependency graph**:
 
 ```text
   CONSTRAINT   ⛔  Team only knows REST — GraphQL is not an option
@@ -41,12 +42,31 @@ Crux stores decisions as **causal triples**:
        ↓
   DECISION     ▸   Use REST not GraphQL
 
-  ↑ These three are welded together.
+  ↑ These are welded together.
     Compaction cannot drop one without dropping all.
     Claude sees the WHY every single time.
 ```
 
 This is the **co-inclusion guarantee**. The reason travels with the decision. Always.
+
+The pipeline runs on every prompt:
+
+```
+User message
+     │
+     ▼
+┌──────────┐   ┌─────────────┐   ┌──────────┐   ┌─────────┐   ┌────────┐
+│ Decompose│──▶│ Deduplicate │──▶│  Select  │──▶│ Compile │──▶│ Verify │
+│ (extract │   │ (Jaccard    │──▶│ (budget  │   │ (format │   │(orphan │
+│  atoms)  │   │  similarity)│   │ + co-    │   │  block) │   │ check) │
+└──────────┘   └─────────────┘   │ include) │   └─────────┘   └────────┘
+                                  └──────────┘
+                                       │
+                                       ▼
+                               additionalContext
+                               injected alongside
+                               the user's prompt
+```
 
 ---
 
@@ -68,176 +88,64 @@ No `npm install`. No config files. Works immediately.
 
 ## ✨ Features at a Glance
 
-- **Causal Memory Graph:** Decisions are linked to their rationales and constraints.
-- **Auto-Extraction:** Automatically understands decisions from normal conversation (no manual commands required).
-- **Compaction Immunity:** Automatically injects co-inclusion rules right before Claude compacts context.
-- **Session-Scoped:** Decisions don't permanently leak. Start a new session, get a clean slate. Promote to permanent `CLAUDE.md` only when you want.
-- **Smart Deduplication:** Rephrase the same decision, Crux recognizes the semantic similarity and keeps the graph clean.
-- **Multi-Mode Extraction (`CRUX_EXTRACTION_MODE`):**
-  - `hybrid` (default): Fast local extraction, falls back to API when unsure (~$0.02/session).
-  - `local`: 100% offline, zero-cost, regex-based engine.
-  - `api`: Maximum accuracy via Anthropic's API.
+- **Causal Memory Graph:** 12 atom types linked in a directed acyclic graph. Decisions carry their rationale and constraints.
+- **Auto-Extraction:** Understands decisions from natural conversation — no manual tagging.
+- **Smart Selection:** Scores atoms by relevance × type weight × PageRank importance × recency. Only the most relevant atoms are injected, respecting a token budget.
+- **Co-Inclusion Guarantee:** A decision is never injected without all its ancestor atoms. If the budget can't fit the chain, the whole group is skipped — no orphans.
+- **Compaction Immunity:** On `PreCompact`, injects group instructions forbidding Claude from separating a decision from its rationale. On resume, the full graph is reloaded from disk.
+- **Session-Scoped Storage:** Each Claude session gets its own graph at `.claude/.crux/sessions/<session_id>.json`. Sessions don't interfere. Promote to permanent `CLAUDE.md` only when you want.
+- **Smart Deduplication:** Rephrase the same decision — Crux recognizes semantic similarity (Jaccard) and merges instead of duplicating.
+- **Multi-Mode Extraction:**
+  - `local` (default): 100% offline, zero-cost, regex-based — extracts CONSTRAINT, RATIONALE, DECISION, GOAL.
+  - `api`: Full semantic extraction via Anthropic or **AWS Bedrock**. All 12 atom types.
+  - `hybrid`: Local first, falls back to API for substance-dense messages with low local confidence.
 
 ---
 
-## 🎯 Examples in Action
+## 🔬 The 12 Atom Types
 
-See how Crux captures architectural decisions from natural conversation:
+| Type | Emoji | Priority | Description |
+|------|:-----:|:--------:|-------------|
+| CONSTRAINT | ⛔ | 1.00 | Hard requirement — never negotiable |
+| DECISION | ▸ | 0.95 | A choice that was made |
+| RATIONALE | 💡 | 0.90 | Why a decision was made |
+| GOAL | 🎯 | 0.85 | What the user wants to achieve |
+| PROBLEM | 🔴 | 0.80 | An issue or bug encountered |
+| SOLUTION | ✅ | 0.70 | Resolution to a problem |
+| FACT | 📌 | 0.60 | Objective verifiable information |
+| STAKEHOLDER | 👤 | 0.55 | Input attributed to a specific person |
+| ASSUMPTION | ❓ | 0.50 | Unconfirmed assumption |
+| CODE_STATE | 📁 | 0.40 | Codebase state |
+| PREFERENCE | 💭 | 0.30 | Soft preference (can be overridden) |
+| QUESTION | ❔ | 0.20 | Open question awaiting answer |
 
-### Example 1: API Security & Privacy
+> **Local mode** extracts: CONSTRAINT, RATIONALE, DECISION, GOAL.  
+> **API/hybrid mode** unlocks all 12 via Claude Haiku.
 
-**Your Prompt:**
-> "We will enhance the API performance while ensuring we never expose user's personal data unless absolutely required for functionality."
+---
 
-**Crux Automatically Extracts:**
-```json
-{
-  "version": "1.0",
-  "atoms": {
-    "constraint_1772028358486_ao2": {
-      "id": "constraint_1772028358486_ao2",
-      "type": "CONSTRAINT",
-      "content": "Never expose user's personal data unless absolutely required for functionality",
-      "dependsOn": [],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 1,
-      "createdAt": "2026-02-25T14:05:58.486Z"
-    },
-    "goal_1772028358487_zjs": {
-      "id": "goal_1772028358487_zjs",
-      "type": "GOAL",
-      "content": "Enhance API performance",
-      "dependsOn": [],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 1,
-      "createdAt": "2026-02-25T14:05:58.487Z"
-    },
-    "rationale_1772028358487_tya": {
-      "id": "rationale_1772028358487_tya",
-      "type": "RATIONALE",
-      "content": "Data exposure must be minimized to protect user privacy and maintain security compliance",
-      "dependsOn": [
-        "constraint_1772028358486_ao2"
-      ],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 1,
-      "createdAt": "2026-02-25T14:05:58.487Z"
-    }
-  },
-  "turnCount": 1,
-  "lastUpdated": "2026-02-25T14:05:58.488Z"
-}
+## 🎯 Example in Action
+
+**Your prompts over several turns:**
+```
+Turn 1: "We must use TypeScript — the team only knows TypeScript. Python is not an option."
+Turn 2: "Let's use Express because it has the best middleware ecosystem."
+Turn 3: "Actually, let's go with Fastify instead — it's 2x faster."
 ```
 
-### Example 2: Technology Stack Decision
-
-**Your Prompt:**
-> "Let's implement the authentication system using JWT tokens because our mobile team already has the libraries integrated, and we can't use OAuth due to budget constraints for third-party services."
-
-**Crux Graph Result:**
-```json
-{
-  "version": "1.0",
-  "atoms": {
-    "decision_1772029123456_xyz": {
-      "id": "decision_1772029123456_xyz",
-      "type": "DECISION",
-      "content": "Implement authentication using JWT tokens",
-      "dependsOn": ["rationale_1772029123457_abc"],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 1,
-      "createdAt": "2026-02-25T14:12:34.567Z"
-    },
-    "rationale_1772029123457_abc": {
-      "id": "rationale_1772029123457_abc",
-      "type": "RATIONALE",
-      "content": "Mobile team already has JWT libraries integrated, ensuring faster development",
-      "dependsOn": ["constraint_1772029123458_def"],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 1,
-      "createdAt": "2026-02-25T14:12:34.568Z"
-    },
-    "constraint_1772029123458_def": {
-      "id": "constraint_1772029123458_def",
-      "type": "CONSTRAINT",
-      "content": "Budget constraints prevent using third-party OAuth services",
-      "dependsOn": [],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 1,
-      "createdAt": "2026-02-25T14:12:34.569Z"
-    }
-  },
-  "turnCount": 1,
-  "lastUpdated": "2026-02-25T14:12:34.570Z"
-}
+**What Crux injects on the next relevant prompt:**
 ```
+[Crux Context — 5 atoms selected, 7 total]
 
-### Example 3: Multi-Turn Decision Evolution
+⛔ CONSTRAINTS (non-negotiable):
+- We must use TypeScript — the team only knows TypeScript
+- Python is not an option
 
-**Turn 1 - Your Prompt:**
-> "We need to choose between React and Vue for our frontend. Our team has more React experience."
+▸ ACTIVE DECISIONS:
+- Let's go with Fastify instead (because: it's 2x faster)
 
-**Turn 2 - Claude's Response Suggests Vue:**
-> "Vue might be better for this use case because..."
-
-**Turn 3 - Your Correction:**
-> "I understand Vue's advantages, but we must stick with React because our company standardized on it last year, and we don't have budget for retraining."
-
-**Final Crux Graph:**
-```json
-{
-  "version": "1.0",
-  "atoms": {
-    "decision_1772029999999_react": {
-      "id": "decision_1772029999999_react",
-      "type": "DECISION",
-      "content": "Use React for frontend development",
-      "dependsOn": ["rationale_1772029999999_team", "rationale_1772029999999_company"],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 3,
-      "createdAt": "2026-02-25T14:30:00.000Z"
-    },
-    "rationale_1772029999999_team": {
-      "id": "rationale_1772029999999_team",
-      "type": "RATIONALE",
-      "content": "Development team has extensive React experience",
-      "dependsOn": [],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 1,
-      "createdAt": "2026-02-25T14:30:00.001Z"
-    },
-    "rationale_1772029999999_company": {
-      "id": "rationale_1772029999999_company",
-      "type": "RATIONALE",
-      "content": "Company standardized on React last year",
-      "dependsOn": ["constraint_1772029999999_budget"],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 3,
-      "createdAt": "2026-02-25T14:30:00.002Z"
-    },
-    "constraint_1772029999999_budget": {
-      "id": "constraint_1772029999999_budget",
-      "type": "CONSTRAINT",
-      "content": "No budget available for team retraining on Vue",
-      "dependsOn": [],
-      "status": "ACTIVE",
-      "source": "user",
-      "turn": 3,
-      "createdAt": "2026-02-25T14:30:00.003Z"
-    }
-  },
-  "turnCount": 3,
-  "lastUpdated": "2026-02-25T14:30:00.004Z"
-}
+🔗 CAUSAL CHAINS (do not separate):
+  CONSTRAINT: Must use TypeScript → RATIONALE: team only knows TypeScript → DECISION: Use Fastify
 ```
 
 ---
@@ -246,20 +154,10 @@ See how Crux captures architectural decisions from natural conversation:
 
 | Command | Description |
 |---|---|
-| `/crux:status` | Inspect the current session's active decision graph. |
-| `/crux:export` | Persist active session decisions to your permanent `CLAUDE.md`. |
-| `use crux-query` | Ask Claude mid-conversation to check active constraints. |
-
----
-
-## 🆚 Why Flat Memory Fails
-
-| Memory Engine | Stores the WHY? | Survives Compaction? | Co-Inclusion Guarantee? |
-|---|---|---|---|
-| **Crux** | **Yes** (Causal Triples) | **Yes** (PreCompact re-injection) | **Yes** |
-| `CLAUDE.md` | No (Flat text) | Partial (Can be summarized out) | No |
-| `claude-mem` | No (Flat facts) | No | No |
-| Cursor Memory | No | No | No |
+| `/crux:status` | Full graph summary — atom counts by type, active decisions with causal chains, session stats, graph health. |
+| `/crux:why <query>` | Trace a decision's causal chain back to its root constraints. |
+| `/crux:decisions` | List all active decisions (with rationale) and any superseded ones. |
+| `/crux:export` | Persist active decisions to your permanent `CLAUDE.md`. |
 
 ---
 
@@ -269,37 +167,83 @@ Crux hooks directly into Claude Code's lifecycle:
 
 ![Crux Architecture Sequence](claude-crux-sequence.png)
 
-1. **`SessionStart`**: Sets up the graph.
-2. **`UserPromptSubmit`**: Extracts decisions from your requests.
-3. **`PreCompact`**: The magic layer—injects instructions forbidding Claude from separating a DECISION from its RATIONALE/CONSTRAINT.
-4. **`Stop`**: Extracts decisions made by Claude's responses.
-5. **`SessionEnd`**: Cleans up.
+```
+SESSION START ────────────────────────────────────────────────
+  │  Load graph from .claude/.crux/sessions/<session_id>.json
+  │  Inject: "[Crux] 5 active atoms, 2 decisions tracked."
+  │
+  ▼
+USER TURN LOOP ──────────────────────────────────────────────
+  │
+  │  ┌─ UserPromptSubmit ───────────────────────────────────┐
+  │  │  1. Output current context (smart-selected)          │
+  │  │  2. Extract new atoms from user message              │
+  │  │  3. Deduplicate (Jaccard similarity merge)           │
+  │  │  4. Save updated graph                               │
+  │  └──────────────────────────────────────────────────────┘
+  │
+  │  ┌─ Stop ───────────────────────────────────────────────┐
+  │  │  Extract atoms from Claude's response (silently)     │
+  │  └──────────────────────────────────────────────────────┘
+  │
+  ▼
+PRE-COMPACT ─────────────────────────────────────────────────
+  │  Inject co-inclusion groups: "DO NOT SEPARATE THESE"
+  │
+  ▼
+SESSION END ─────────────────────────────────────────────────
+     Log stats. Graph preserved for /crux:status and export.
+```
+
+---
+
+## 🆚 Why Flat Memory Fails
+
+| Memory Engine | Stores the WHY? | Survives Compaction? | Co-Inclusion Guarantee? | Smart Selection? |
+|---|---|---|---|---|
+| **Crux** | **Yes** (Causal Graph) | **Yes** (disk + PreCompact) | **Yes** | **Yes** (PageRank + relevance) |
+| `CLAUDE.md` | No (Flat text) | Partial (summarized out) | No | No |
+| `claude-mem` | No (Flat facts) | No | No | No |
+| Cursor Memory | No | No | No | No |
+
+---
+
+## 🤝 Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CRUX_EXTRACTION_MODE` | `local` | `local` / `api` / `hybrid` |
+| `CRUX_TOKEN_BUDGET` | `2000` | Max tokens injected per prompt |
+| `CRUX_SIMILARITY_THRESHOLD` | `0.7` | Dedup threshold (0.0–1.0) |
+| `CRUX_DATA_DIR` | `.claude/.crux` | Override storage location |
+| `CRUX_MODEL` | `claude-haiku-4-5-20251001` | Model for API/hybrid extraction |
+| `ANTHROPIC_API_KEY` | — | Required for `api` / `hybrid` mode |
+| `ANTHROPIC_BEDROCK_BASE_URL` | — | AWS Bedrock gateway URL |
+| `ANTHROPIC_AUTH_TOKEN` | — | AWS Bedrock auth token |
+
+### Storage
+
+Each session's graph is stored in-project:
+```
+.claude/.crux/sessions/
+└── <session_id>.json    ← one graph per Claude session
+```
+Sessions are isolated — a new session always starts clean. Use `/crux:export` to promote decisions to `CLAUDE.md` permanently.
+
+**Troubleshooting:**  
+- **No decisions extracting?** Check `CRUX_EXTRACTION_MODE`. In `api`/`hybrid`, verify `ANTHROPIC_API_KEY`.  
+- **Decisions gone after compact?** They shouldn't be — graph is on disk. Run `/crux:status` to verify reload.  
+- **Not firing?** Run `claude --plugin-dir ./crux` and press `Ctrl+o` for verbose hook logs.
 
 ---
 
 ## 🔮 Roadmap
 
-### v0.2 — Conflict Detection
-When you say "Use PostgreSQL" and later say "Use MongoDB", Crux will flag it: *"This contradicts your earlier decision."* Plus manual commands (`/crux:add`, `/crux:supersede`).
-
-### v0.3 — Expanded Graph & Teams
-12 atom types (GOAL, PROBLEM, SOLUTION, etc.). Git-committable graph for team-shared decisions. Per-directory scoping for monorepos.
+### v0.3 — Conflict Detection
+When you say "Use PostgreSQL" and later say "Use MongoDB" in the same session, Crux will flag it: *"This contradicts your earlier decision."* Plus manual commands (`/crux:add`, `/crux:supersede`).
 
 ### v1.0 — The Proxy
 `crux-proxy` binary intercepts Anthropic API traffic directly. Token-exact compaction control. No hooks needed — 100% protocol-level co-inclusion guarantee.
-
----
-
-## 🤝 Troubleshooting & Config
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CRUX_EXTRACTION_MODE` | `hybrid` | `local` / `api` / `hybrid` |
-| `ANTHROPIC_API_KEY` | — | Required only if using `api` or `hybrid` mode. |
-
-**No decisions extracting?** Ensure `CRUX_EXTRACTION_MODE` is set, or check your API key if using full extraction.  
-**Decisions gone?** Crux is session-scoped. Run `/crux:export` before quitting to save to `CLAUDE.md`.  
-**Not firing?** Run `claude --plugin-dir ./crux`, hit `Ctrl+o` for verbose logs.
 
 ---
 

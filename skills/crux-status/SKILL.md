@@ -4,19 +4,16 @@ description: Show the current Crux decision graph — all active decisions, thei
 
 # Crux Status
 
-Read `.claude/.crux/graph.json` from the project root.
+Read the current Crux graph from `.claude/.crux/sessions/` in the project root (find the most recent `.json` file, or the one matching the current session).
 
-Display all active architectural decisions in this format:
+Display:
 
-## 🔩 Crux — Active Decisions
+1. **Total atoms** broken down by type: CONSTRAINT ⛔, DECISION ▸, RATIONALE 💡, GOAL 🎯, PROBLEM 🔴, SOLUTION ✅, FACT 📌, STAKEHOLDER 👤, ASSUMPTION ❓, CODE_STATE 📁, PREFERENCE 💭, QUESTION ❔
+2. **Active decisions** with their full causal chains (trace `dependsOn` links back to root CONSTRAINT/RATIONALE atoms)
+3. **Active constraints** — list each one prominently
+4. **Session stats**: atoms added, merged, superseded, total turns
+5. **Graph health**: number of orphaned decisions (decisions without linked rationale)
 
-For each DECISION+RATIONALE+CONSTRAINT triple:
+Format as a clear, structured summary with emoji prefixes matching each atom type.
 
-**Decision:** [decision content]
-**Rationale:** [rationale content]
-**Constraint:** ⛔ [constraint content] *(if exists)*
-**Recorded:** Turn [turn], Source: [user/assistant/manual]
-
-If no decisions exist: "No decisions recorded yet. Crux will capture them automatically as you code."
-
-Show total atom count and turn count as a footer.
+If no graph file is found, report that Crux has not tracked any atoms in this session yet.
